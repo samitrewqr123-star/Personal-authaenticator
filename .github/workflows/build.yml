@@ -16,6 +16,7 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm install
+      - run: mkdir -p www && cp authenticator.html www/index.html
       - run: npx cap add android
       - run: npx cap sync android
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
