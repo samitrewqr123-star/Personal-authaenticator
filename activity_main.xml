@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="16dp">
+    <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Personal Authenticator" android:textSize="24sp" android:textStyle="bold" android:paddingBottom="8dp"/>
+    <TextView android:id="@+id/timer" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Refresh in 30s" android:textSize="14sp" android:paddingBottom="8dp"/>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+        <Button android:id="@+id/addButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Add account"/>
+        <Button android:id="@+id/scanButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Scan QR"/>
+    </LinearLayout>
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:id="@+id/list" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingTop="12dp"/>
+    </ScrollView>
+</LinearLayout>
