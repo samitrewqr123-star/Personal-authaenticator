@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0c12">
+<title>Authenticator</title>
+<style>
+:root{--bg:#f3f4fb;--card:#fff;--tx:#12131a;--mut:#6b7090;--ac:#5b6cff;--ac2:#8f5bff;--bd:#e6e8f3;--warn:#e8590c;--danger:#d93025;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0c12;--card:#151722;--tx:#f2f3fa;--mut:#8b90ab;--ac:#7c8bff;--ac2:#b07cff;--bd:#262a3d;--warn:#ffb454;--danger:#ff8a80}}
+:root[data-theme="dark"]{--bg:#0b0c12;--card:#151722;--tx:#f2f3fa;--mut:#8b90ab;--ac:#7c8bff;--ac2:#b07cff;--bd:#262a3d;--warn:#ffb454;--danger:#ff8a80}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(600px 300px at 15% -5%,color-mix(in srgb,var(--ac) 28%,transparent),transparent),radial-gradient(500px 300px at 100% 0,color-mix(in srgb,var(--ac2) 22%,transparent),transparent),var(--bg);background-attachment:fixed}
+.wrap{max-width:480px;margin:0 auto;padding:18px 16px 110px}
+.top{display:flex;align-items:center;justify-content:space-between;margin:6px 2px 18px}
+h1{font-size:26px;margin:0;font-weight:800;letter-spacing:-.5px;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ib{width:42px;height:42px;border-radius:14px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:20px;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:22px;padding:16px;margin-bottom:12px;box-shadow:0 8px 24px rgba(20,20,60,.08);animation:in .35s ease both}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.r{display:flex;align-items:center;gap:14px}
+.av{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px;flex:none}
+.mid{flex:1;min-width:0}
+.iss{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc{color:var(--mut);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.code{font-size:32px;font-weight:700;letter-spacing:3px;margin-top:10px;font-variant-numeric:tabular-nums;cursor:pointer;user-select:none;background:linear-gradient(90deg,var(--ac),var(--ac2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.code.w{background:none;color:var(--warn)}
+.ring{position:relative;width:42px;height:42px;flex:none}
+.ring svg{transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--mut)}
+.del{background:none;border:0;color:var(--mut);font-size:12px;padding:10px 0 0;cursor:pointer;opacity:.7}
+.fab{position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom,0px));width:60px;height:60px;border-radius:20px;background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff;border:0;font-size:32px;box-shadow:0 10px 26px rgba(92,80,255,.45);cursor:pointer}
+.sheet{display:none;position:fixed;inset:0;background:rgba(5,6,12,.6);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;z-index:5}
+.sheet.on{display:flex}
+.panel{background:var(--card);width:100%;max-width:480px;border-radius:26px 26px 0 0;padding:22px 18px calc(22px + env(safe-area-inset-bottom,0px));animation:in .25s ease both}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 5px}
+input{width:100%;padding:14px;border-radius:14px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:16px}
+.btns{display:flex;gap:10px;margin-top:16px}
+button.pri,.btns button{flex:1;padding:14px;border-radius:14px;border:0;font-size:16px;font-weight:600;cursor:pointer;color:var(--tx);background:var(--bd)}
+button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
+.menu button{display:block;width:100%;text-align:left;padding:15px 4px;border:0;border-bottom:1px solid var(--bd);background:none;color:var(--tx);font-size:16px;cursor:pointer}
+.err{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+.empty{text-align:center;color:var(--mut);margin-top:70px;line-height:1.7}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:#20222e;color:#fff;padding:10px 18px;border-radius:22px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+.toast.on{opacity:1}
+.scr{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;z-index:10;text-align:center;background:radial-gradient(600px 400px at 50% -10%,color-mix(in srgb,var(--ac) 30%,transparent),transparent),var(--bg)}
+.scr.on{display:flex}
+.scr p{color:var(--mut);margin:6px 0 18px;font-size:14px}
+.logo{font-size:44px;margin-bottom:6px}
+#dots{display:flex;gap:14px;margin-bottom:10px}
+#dots.sh{animation:sh .4s}
+@keyframes sh{25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+#dots i{width:14px;height:14px;border-radius:50%;border:2px solid var(--mut);transition:.15s}
+#dots i.f{background:linear-gradient(135deg,var(--ac),var(--ac2));border-color:transparent;transform:scale(1.15)}
+#pad{display:grid;grid-template-columns:repeat(3,72px);gap:14px;margin:14px 0 4px}
+#pad button{width:72px;height:72px;border-radius:50%;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:26px;cursor:pointer}
+#pad button:active{background:var(--bd)}
+.lk{background:none;border:0;color:var(--mut);font-size:13px;margin:8px 6px;text-decoration:underline;cursor:pointer}
+.box{width:100%;max-width:320px}
+.rcode{font-size:20px;font-weight:700;letter-spacing:1.5px;padding:18px 10px;border-radius:16px;border:1px dashed var(--ac);margin:8px 0 14px;word-break:break-all}
+.box .pri{width:100%;margin-top:10px;flex:none}
+#rcin{text-align:center;letter-spacing:2px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div id="lock" class="scr">
+  <div class="logo">🔐</div>
+  <h1 id="lt"></h1><p id="ls"></p>
+  <div id="dots"></div>
+  <div id="recbox" class="box" hidden><input id="rcin" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"><button class="pri" id="rcgo">Continue</button></div>
+  <div id="pad"></div>
+  <div class="err" id="le"></div>
+  <div><button class="lk" id="fg">PIN bhule gechi</button><button class="lk" id="rs">Backup restore</button><button class="lk" id="bk" hidden>Back</button></div>
+</div>
+
+<div id="rcs" class="scr">
+  <div class="box">
+    <div class="logo">🗝️</div><h1>Recovery code</h1>
+    <p>PIN bhule gele ei code diye notun PIN set korte parbe ar sob account thakbe. Kothao save kore rakho (nijeke email koro ba likhe rakho).</p>
+    <div class="rcode" id="rcc"></div>
+    <button class="pri" id="rccp">Copy</button>
+    <button class="pri" id="rcem">Gmail e nijeke pathao</button>
+    <button class="pri" id="rcok" style="margin-top:22px">Ami save korechi</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="wrap">
+    <div class="top"><h1>Authenticator</h1><button class="ib" id="mn" aria-label="Menu">⋯</button></div>
+    <div id="list"></div>
+  </div>
+  <button class="fab" id="add" aria-label="Add account">+</button>
+  <div class="sheet" id="sheet"><div class="panel">
+    <strong style="font-size:18px">Account add koro</strong>
+    <label>Account name (jemon: Google:me@gmail.com)</label>
+    <input id="nm" autocomplete="off">
+    <label>Secret key ba otpauth:// link</label>
+    <input id="sk" autocomplete="off" autocapitalize="characters" placeholder="JBSWY3DPEHPK3PXP">
+    <div class="err" id="err"></div>
+    <div class="btns"><button id="cancel">Cancel</button><button class="ok" id="save">Save</button></div>
+  </div></div>
+  <div class="sheet" id="msheet"><div class="panel menu">
+    <button id="bkc">📋 Backup copy koro</button>
+    <button id="bke">✉️ Backup Gmail e pathao</button>
+    <button id="nrc">🗝️ Notun recovery code</button>
+    <button id="lkn">🔒 Ekhoni lock koro</button>
+    <button id="mc" style="border:0;color:var(--mut)">Close</button>
+  </div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const VK='my_totp_vault_v2',$=id=>document.getElementById(id),E=new TextEncoder(),D=new TextDecoder();
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+const b64=u=>btoa(String.fromCharCode(...u)),ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+let accts=[],mk=null,key=null,vault=null,mode='',pin='',tmp='',busy=false,tries=0;
+const getV=()=>{try{return JSON.parse(localStorage.getItem(VK)||'null')}catch(e){return null}};
+const putV=()=>{try{localStorage.setItem(VK,JSON.stringify(vault))}catch(e){}};
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1500)}
+async function derive(sec,s){const m=await crypto.subtle.importKey('raw',E.encode(sec),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:200000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function wrap(raw,sec){const s=rnd(16),iv=rnd(12),k=await derive(sec,s);return{s:b64(s),iv:b64(iv),d:b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},k,raw)))}}
+async function unwrap(w,sec){const k=await derive(sec,ub(w.s));return new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:ub(w.iv)},k,ub(w.d)))}
+async function useMk(raw){mk=raw;key=await crypto.subtle.importKey('raw',raw,'AES-GCM',false,['encrypt','decrypt'])}
+async function save(){const iv=rnd(12);vault.iv=b64(iv);vault.d=b64(new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,E.encode(JSON.stringify(accts)))));putV()}
+async function load(){const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub(vault.iv)},key,ub(vault.d));accts=JSON.parse(D.decode(pt))}
+function genCode(){const A='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',r=rnd(16);return[0,1,2,3].map(i=>[...r.slice(i*4,i*4+4)].map(x=>A[x%32]).join('')).join('-')}
+
+/* ---------- lock screen ---------- */
+const T={setup1:['PIN set koro','6 digit-er PIN bachho'],setup2:['PIN abar dao','Confirm korte'],unlock:['Welcome back','PIN dao'],new1:['Notun PIN','6 digit-er notun PIN'],new2:['PIN abar dao','Confirm korte'],rec:['Recovery code','Setup-er somoy pawa code ta dao']};
+$('dots').innerHTML='<i></i>'.repeat(6);
+$('pad').innerHTML=[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>k===''?'<span></span>':`<button data-k="${k}">${k}</button>`).join('');
+function dots(){[...$('dots').children].forEach((d,i)=>d.classList.toggle('f',i<pin.length))}
+function shake(){const d=$('dots');d.classList.remove('sh');void d.offsetWidth;d.classList.add('sh')}
+function setMode(m){mode=m;pin='';dots();$('lt').textContent=T[m][0];$('ls').textContent=T[m][1];$('le').textContent='';const r=m==='rec';$('recbox').hidden=!r;$('pad').hidden=r;$('dots').hidden=r;$('fg').hidden=m!=='unlock';$('rs').hidden=!(m==='setup1'||m==='unlock');$('bk').hidden=!(r||m==='new1'||m==='new2')}
+function showLock(){key=mk=null;accts=[];$('list').innerHTML='';vault=getV();$('app').style.display='none';['sheet','msheet'].forEach(i=>$(i).classList.remove('on'));$('rcs').classList.remove('on');$('lock').classList.add('on');setMode(vault?'unlock':'setup1')}
+function openApp(){$('lock').classList.remove('on');$('app').style.display='block';render()}
+function showRC(rc){$('lock').classList.remove('on');$('rcc').textContent=rc;$('rcs').classList.add('on')}
+async function submit(){
+  if(busy)return;busy=true;const p=pin,m=mode;
+  try{
+    if(m==='setup1'||m==='new1'){tmp=p;setMode(m==='setup1'?'setup2':'new2');return}
+    if(m==='setup2'||m==='new2'){
+      if(p!==tmp){setMode(m==='setup2'?'setup1':'new1');$('le').textContent='PIN mile nai, abar dao';shake();return}
+      if(m==='setup2'){const raw=rnd(32),rc=genCode();vault={p:await wrap(raw,p),r:await wrap(raw,rc.replace(/-/g,''))};await useMk(raw);accts=[];await save();showRC(rc)}
+      else{vault.p=await wrap(mk,p);await load();await save();openApp()}
+      return}
+    if(m==='unlock'){
+      if(tries>=3)await new Promise(r=>setTimeout(r,Math.min(30000,(tries-2)*3000)));
+      try{await useMk(await unwrap(vault.p,p));await load();tries=0;openApp()}
+      catch(e){tries++;pin='';dots();$('le').textContent='PIN thik na';shake()}
+    }
+  }finally{busy=false}
+}
+$('pad').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||busy)return;
+  if(b.dataset.k==='⌫')pin=pin.slice(0,-1);else if(pin.length<6)pin+=b.dataset.k;
+  dots();if(pin.length===6)submit();
+});
+$('rcgo').onclick=async()=>{
+  const c=$('rcin').value.toUpperCase().replace(/[^A-Z2-7]/g,'');
+  try{await useMk(await unwrap(vault.r,c));$('rcin').value='';setMode('new1')}catch(e){$('le').textContent='Code thik na'}
+};
+$('fg').onclick=()=>setMode('rec');
+$('bk').onclick=()=>showLock();
+$('rs').onclick=()=>{
+  const t=prompt('Backup text paste koro');if(!t)return;
+  try{const v=JSON.parse(atob(t.trim()));if(!v.p||!v.r||!v.d)throw 0;if(getV()&&!confirm('Ekhon-kar data replace hobe. Continue?'))return;vault=v;putV();showLock();toast('Restore hoyeche. PIN dao')}
+  catch(e){alert('Backup text thik na')}
+};
+$('rccp').onclick=()=>{navigator.clipboard.writeText($('rcc').textContent).then(()=>toast('Copied'),()=>toast('Copy hoyni'))};
+$('rcem').onclick=()=>{location.href='mailto:?subject='+encodeURIComponent('Authenticator recovery code')+'&body='+encodeURIComponent($('rcc').textContent)};
+$('rcok').onclick=()=>{$('rcs').classList.remove('on');openApp()};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&mk)showLock()});
+
+/* ---------- menu ---------- */
+$('mn').onclick=()=>$('msheet').classList.add('on');
+$('mc').onclick=()=>$('msheet').classList.remove('on');
+const bkText=()=>btoa(JSON.stringify(vault));
+$('bkc').onclick=()=>{navigator.clipboard.writeText(bkText()).then(()=>toast('Backup copy hoyeche'),()=>toast('Copy hoyni'));$('msheet').classList.remove('on')};
+$('bke').onclick=()=>{location.href='mailto:?subject='+encodeURIComponent('Authenticator backup')+'&body='+encodeURIComponent(bkText())};
+$('nrc').onclick=async()=>{const rc=genCode();vault.r=await wrap(mk,rc.replace(/-/g,''));putV();$('msheet').classList.remove('on');showRC(rc)};
+$('lkn').onclick=()=>showLock();
+
+/* ---------- totp ---------- */
+function b32(s){
+  s=s.replace(/[\s=-]/g,'').toUpperCase();
+  const A='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';let bits='',out=[];
+  for(const c of s){const i=A.indexOf(c);if(i<0)throw new Error('bad');bits+=i.toString(2).padStart(5,'0')}
+  for(let i=0;i+8<=bits.length;i+=8)out.push(parseInt(bits.slice(i,i+8),2));
+  if(!out.length)throw new Error('bad');
+  return new Uint8Array(out);
+}
+async function totp(a){
+  const p=a.period||30,d=a.digits||6,c=Math.floor(Date.now()/1000/p);
+  const buf=new ArrayBuffer(8),v=new DataView(buf);
+  v.setUint32(0,Math.floor(c/4294967296));v.setUint32(4,c>>>0);
+  const k=await crypto.subtle.importKey('raw',b32(a.secret),{name:'HMAC',hash:'SHA-1'},false,['sign']);
+  const h=new Uint8Array(await crypto.subtle.sign('HMAC',k,buf)),o=h[h.length-1]&15;
+  const n=(((h[o]&127)<<24)|(h[o+1]<<16)|(h[o+2]<<8)|h[o+3])%Math.pow(10,d);
+  return String(n).padStart(d,'0');
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=c=>c.length===6?c.slice(0,3)+' '+c.slice(3):c;
+const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
+let rendered=false;
+async function render(){
+  if(!key)return;
+  const L=$('list');
+  if(!accts.length){L.innerHTML='<div class="empty">Kono account nai.<br>Niche <b>+</b> chepe prothom account add koro.</div>';return}
+  const now=Math.floor(Date.now()/1000),C=2*Math.PI*16;
+  const html=await Promise.all(accts.map(async(a,i)=>{
+    const p=a.period||30,left=p-(now%p);let c;
+    try{c=fmt(await totp(a))}catch(e){c='Error'}
+    const x=a.name.indexOf(':'),iss=x>0?a.name.slice(0,x):a.name,acc=x>0?a.name.slice(x+1):'';
+    return `<div class="card" style="${rendered?'animation:none':''}"><div class="r">
+      <div class="av" style="background:linear-gradient(135deg,hsl(${hue(a.name)},70%,58%),hsl(${(hue(a.name)+40)%360},70%,48%))">${esc(iss.trim().charAt(0).toUpperCase()||'?')}</div>
+      <div class="mid"><div class="iss">${esc(iss)}</div><div class="acc">${esc(acc)}</div></div>
+      <div class="ring"><svg width="42" height="42"><circle cx="21" cy="21" r="16" fill="none" stroke="var(--bd)" stroke-width="3"/><circle cx="21" cy="21" r="16" fill="none" stroke="${left<=5?'var(--warn)':'var(--ac)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-left/p)}" style="transition:stroke-dashoffset 1s linear"/></svg><b>${left}</b></div></div>
+      <div class="code ${left<=5?'w':''}" data-c="${c.replace(' ','')}">${c}</div>
+      <button class="del" data-i="${i}">Delete</button></div>`;
+  }));
+  if(key){L.innerHTML=html.join('');rendered=true}
+}
+$('list').addEventListener('click',e=>{
+  const c=e.target.closest('.code');
+  if(c)navigator.clipboard.writeText(c.dataset.c).then(()=>toast('Code copy hoyeche'),()=>toast('Copy hoyni'));
+  const d=e.target.closest('.del');
+  if(d&&confirm('Ei account delete korbe? Backup na thakle abar login korte parbe na.')){accts.splice(+d.dataset.i,1);save();render()}
+});
+$('add').onclick=()=>{$('nm').value='';$('sk').value='';$('err').textContent='';$('sheet').classList.add('on')};
+$('cancel').onclick=()=>$('sheet').classList.remove('on');
+$('save').onclick=()=>{
+  let name=$('nm').value.trim(),raw=$('sk').value.trim(),a={period:30,digits:6};
+  try{
+    if(/^otpauth:\/\//i.test(raw)){
+      const u=new URL(raw),q=u.searchParams;
+      a.secret=q.get('secret')||'';
+      if(!name)name=decodeURIComponent(u.pathname.replace(/^\//,''))||q.get('issuer')||'Account';
+      if(q.get('period'))a.period=+q.get('period')||30;
+      if(q.get('digits'))a.digits=+q.get('digits')||6;
+    }else a.secret=raw;
+    if(!name)name='Account';
+    b32(a.secret);
+  }catch(e){$('err').textContent='Secret key ta thik na. Abar check koro.';return}
+  a.name=name;accts.push(a);save();$('sheet').classList.remove('on');render();
+};
+showLock();setInterval(render,1000);
+</script>
+</body>
+</html>
