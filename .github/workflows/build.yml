@@ -16,8 +16,11 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: npm install
+      - run: npm install capacitor-native-biometric
       - run: mkdir -p www && cp authenticator.html www/index.html
       - run: npx cap add android
+      - run: |
+          sed -i 's#</manifest>#<uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/><uses-permission android:name="android.permission.USE_BIOMETRIC"/></manifest>#' android/app/src/main/AndroidManifest.xml
       - run: mkdir -p assets && cp icon-*.png assets/
       - run: npx @capacitor/assets generate --android
       - run: npx cap sync android
