@@ -214,7 +214,7 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
 <script>
 const UK='auth_users_v3',SK='auth_sess_v3',$=id=>document.getElementById(id),E=new TextEncoder(),D=new TextDecoder();
 const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
-const b64=u=>btoa(String.fromCharCode(...u)),ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192)s+=String.fromCharCode.apply(null,u.subarray(i,i+8192));return btoa(s)},ub=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const CATS=[['Facebook','f','#1877f2'],['Gmail','G','#ea4335'],['Instagram','I','#d6249f'],['X / Twitter','X','#14171a'],['WhatsApp','W','#25a244'],['Telegram','T','#229ed9'],['TikTok','♪','#111'],['GitHub','Gh','#24292e'],['Microsoft','M','#0078d4'],['Apple','A','#6e6e73'],['Amazon','a','#ff9900'],['Discord','D','#5865f2'],['LinkedIn','in','#0a66c2'],['Binance','B','#d9a400'],['Other','＋','#7a7f9a']];
@@ -333,6 +333,7 @@ $('rcok').onclick=()=>{const n=rcNext;rcNext=null;if(n)n()};
 async function afterPin(){
   if(cur.bio!=='pin'){if(!await bioScreen(!cur.bio))return beginLock()}
   if(!data.v){if(!await voiceFlow('enroll'))return beginLock()}
+  else if(data.v.mode==='voice'&&!data.v.t){if(!await voiceFlow('enroll'))return beginLock()}
   else if(data.v.mode==='voice'){if(!await voiceFlow('verify'))return beginLock()}
   openApp();
 }
@@ -386,35 +387,40 @@ function fft(re,im){const n=re.length;for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j
 for(let l=2;l<=n;l<<=1){const a=-2*Math.PI/l,wr=Math.cos(a),wi=Math.sin(a);for(let i=0;i<n;i+=l){let cr=1,ci=0;for(let k=0;k<l/2;k++){const u=i+k,v=i+k+l/2,xr=re[v]*cr-im[v]*ci,xi=re[v]*ci+im[v]*cr;re[v]=re[u]-xr;im[v]=im[u]-xi;re[u]+=xr;im[u]+=xi;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t}}}}
 const mel=f=>2595*Math.log10(1+f/700),imel=m=>700*(Math.pow(10,m/2595)-1);
 function mfb(sr,N,nf){const lo=mel(100),hi=mel(Math.min(5000,sr/2*.95)),p=[];for(let i=0;i<nf+2;i++)p.push(Math.floor((N+1)*imel(lo+(hi-lo)*i/(nf+1))/sr));const F=[];for(let m=1;m<=nf;m++){const f=new Float32Array(N/2+1);for(let k=p[m-1];k<p[m];k++)f[k]=(k-p[m-1])/(p[m]-p[m-1]||1);for(let k=p[m];k<=p[m+1];k++)f[k]=(p[m+1]-k)/(p[m+1]-p[m]||1);F.push(f)}return F}
-function feat(x,sr){
+/* kotha-r MFCC sequence (silence trim + mean removal) */
+function seq(x,sr){
   const N=sr>=32000?1024:512,H=N/2;if(x.length<N*4)return null;
   const y=new Float32Array(x.length);y[0]=x[0];for(let i=1;i<x.length;i++)y[i]=x[i]-.97*x[i-1];
   const nf=Math.floor((y.length-N)/H)+1,en=new Float32Array(nf);
-  for(let f=0;f<nf;f++){let s=0;for(let i=0;i<N;i++){const v=x[f*H+i];s+=v*v}en[f]=s/N}
-  const q=Array.from(en).sort((a,b)=>a-b)[Math.floor(nf*.9)],thr=q*.1;
+  for(let f=0;f<nf;f++){let s=0;for(let i=0;i<N;i++){const v=y[f*H+i];s+=v*v}en[f]=s/N}
+  const s=Array.from(en).sort((a,b)=>a-b),thr=Math.max(s[Math.floor(nf*.1)]*6,s[Math.floor(nf*.9)]*.02);
+  let a=-1,b=-1;for(let f=0;f<nf;f++)if(en[f]>thr){if(a<0)a=f;b=f}
+  if(a<0||b-a<20)return null;
   const FB=mfb(sr,N,26),win=new Float32Array(N);for(let i=0;i<N;i++)win[i]=.5-.5*Math.cos(2*Math.PI*i/(N-1));
   const re=new Float32Array(N),im=new Float32Array(N),C=[];
-  for(let f=0;f<nf;f++){
-    if(en[f]<=thr)continue;
+  for(let f=a;f<=b;f++){
     for(let i=0;i<N;i++){re[i]=y[f*H+i]*win[i];im[i]=0}
     fft(re,im);
-    const L=FB.map(fl=>{let s=0;for(let k=0;k<=N/2;k++)if(fl[k])s+=fl[k]*(re[k]*re[k]+im[k]*im[k]);return Math.log(s+1e-9)});
-    const c=[];for(let j=1;j<=12;j++){let s=0;for(let m=0;m<26;m++)s+=L[m]*Math.cos(Math.PI*j*(m+.5)/26);c.push(s)}
+    const L=FB.map(fl=>{let q=0;for(let k=0;k<=N/2;k++)if(fl[k])q+=fl[k]*(re[k]*re[k]+im[k]*im[k]);return Math.log(q+1e-9)});
+    const c=[];for(let j=1;j<=12;j++){let q=0;for(let m=0;m<26;m++)q+=L[m]*Math.cos(Math.PI*j*(m+.5)/26);c.push(q)}
     C.push(c);
   }
-  if(C.length<12)return null;
-  const mean=[],sd=[];
-  for(let j=0;j<12;j++){let s=0;for(const c of C)s+=c[j];const m=s/C.length;let v=0;for(const c of C)v+=(c[j]-m)**2;mean.push(m);sd.push(Math.sqrt(v/C.length)*.2)}
-  return mean.concat(sd);
+  for(let j=0;j<12;j++){let m=0;for(const c of C)m+=c[j];m/=C.length;for(const c of C)c[j]-=m}
+  const R=[];for(let i=0;i+1<C.length;i+=2)R.push(C[i].map((v,k)=>Math.round((v+C[i+1][k])*50)/100));
+  return R.length>=10?R:null;
 }
-const dist=(a,b)=>Math.sqrt(a.reduce((s,v,i)=>s+(v-b[i])**2,0));
+function dtw(A,B){
+  const n=A.length,m=B.length;let prev=new Float64Array(m+1).fill(Infinity),cur;prev[0]=0;
+  for(let i=1;i<=n;i++){cur=new Float64Array(m+1).fill(Infinity);for(let j=1;j<=m;j++){let d=0;for(let k=0;k<12;k++){const t=A[i-1][k]-B[j-1][k];d+=t*t}cur[j]=Math.sqrt(d)+Math.min(prev[j],prev[j-1],cur[j-1])}prev=cur}
+  return prev[m]/(n+m);
+}
 /*END*/
 
-const TMIN=9,TMAX=20;
+
 async function voiceSaved(){
   try{const u=JSON.parse(localStorage.getItem(UK)||'[]').find(x=>x.id===cur.id);if(!u||!u.vault)return false;
     const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub(u.vault.iv)},key,ub(u.vault.d)),d=JSON.parse(D.decode(pt));
-    return !!(d.v&&d.v.mode==='voice'&&d.v.c&&d.v.c.length===24&&d.v.c.every(isFinite)&&isFinite(d.v.th))}
+    return !!(d.v&&d.v.mode==='voice'&&d.v.t&&d.v.t.length===3&&isFinite(d.v.th))}
   catch(e){return false}
 }
 async function record(ms){
@@ -440,18 +446,19 @@ function voiceFlow(m){return new Promise(res=>{
     if(rec)return;rec=true;$('ve').textContent='';$('vmic').classList.add('rec');$('vmt').textContent='Bolo…';
     try{
       const{x,sr}=await record(3000);$('vmic').classList.remove('rec');$('vmt').textContent='…';
-      const f=feat(x,sr);
-      if(!f){$('ve').textContent='Voice shona jayni. Mic-er kache, shanto jayga-y abar bolo.';return}
+      const f=seq(x,sr);
+      if(!f){$('ve').textContent='Kotha shona jayni. Mic-er kache, shanto jayga-y abar bolo.';return}
       if(m==='enroll'){
         F.push(f);n++;ui();
         if(n<3){$('ve').textContent=`${n}/3 hoyeche. Abar ekoi kotha bolo.`;return}
-        const c=F[0].map((_,i)=>F.reduce((s,v)=>s+v[i],0)/F.length),intra=Math.max(...F.map(v=>dist(v,c)));
-        let th=Math.min(Math.max(intra*2.5,TMIN),TMAX);if(!isFinite(th))th=TMAX;
-        data.v={mode:'voice',c,th};await save();
+        const ds=[dtw(F[0],F[1]),dtw(F[0],F[2]),dtw(F[1],F[2])],base=ds.reduce((p,q)=>p+q,0)/3;
+        if(Math.max(...ds)>Math.min(...ds)*2.2+.5){n=0;F=[];ui();$('ve').textContent='3 ta record mile nai (ekoi kotha bolo ni). Abar prothom theke bolo.';return}
+        let th=base*2;if(!isFinite(th))th=3;
+        data.v={mode:'voice',t:F,th};await save();
         if(!await voiceSaved()){data.v=null;n=0;F=[];ui();$('ve').textContent='Voice save hoyni (storage/audio problem). Abar try koro.';return}
         toast('Voice save hoyeche ✅ (limit '+th.toFixed(1)+')');end(true);
       }else{
-        const sc=dist(f,data.v.c);
+        const sc=data.v.t.reduce((p,t)=>p+dtw(f,t),0)/data.v.t.length;
         if(sc<=data.v.th){end(true)}
         else{fails++;$('ve').textContent=`Voice mile nai (${fails}/3). Score ${sc.toFixed(1)}, limit ${data.v.th.toFixed(1)}. Enroll-er moto ekoi kotha, ekoi doori theke bolo.`;if(fails>=3)$('vrs').style.fontWeight='700'}
       }
