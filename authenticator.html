@@ -83,6 +83,13 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
 @keyframes pulse{50%{transform:scale(1.07)}}
 .st{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:10px 0 0;color:var(--mut)}
 .st b{color:var(--tx);font-weight:600;text-align:right}
+.dcard{padding:14px 16px}
+.dcard .iss{font-size:15px}
+.sec{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;letter-spacing:.5px;word-break:break-all;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin-top:6px;cursor:pointer;color:var(--tx)}
+.sec.hide{color:transparent;text-shadow:0 0 7px var(--mut)}
+.drow{display:flex;gap:8px;margin-top:8px}
+.drow button{flex:1;padding:9px;border-radius:10px;border:0;background:var(--bd);color:var(--tx);font-size:13px;font-weight:600;cursor:pointer}
+.warn-box{background:color-mix(in srgb,var(--warn) 14%,transparent);border:1px solid var(--warn);border-radius:16px;padding:12px 14px;font-size:13px;color:var(--tx);line-height:1.5;margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -171,7 +178,26 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
       <button id="bkr">♻️ Backup restore</button>
       <button id="lkn">🔒 Ekhoni lock koro</button>
     </div>
+    <div class="card menu"><button id="opendata">🛠️ Admin Panel (password lagbe)</button></div>
     <div class="card menu"><button id="lo2" style="color:var(--danger)">🚪 Logout</button></div>
+  </div></div>
+
+  <div id="dataview" hidden><div class="wrap">
+    <div class="top"><button class="ib" id="db" aria-label="Back">‹</button><h1 style="flex:1">Admin Panel</h1><span style="width:42px"></span></div>
+    <div class="warn-box">⚠️ Ei page-e tomar sensitive data (2FA secret key shoho) plain dekhano hoy. Kaoke dekhiyo na, screenshot share koro na.</div>
+    <div class="card" id="dprof"></div>
+    <div class="card dcard">
+      <strong style="font-size:15px">Password change koro</strong>
+      <div class="acc" style="margin-top:4px">Password kokhono plain store hoy na (shudhu ekta hash thake), tai eikhane dekhano jay na — kintu current password diye shoja notun password set korte paro, email code chhara-i:</div>
+      <div class="drow"><button id="dpwreset">🔑 Password change koro</button></div>
+    </div>
+    <div class="card dcard">
+      <strong style="font-size:15px">🗝️ Recovery code</strong>
+      <div class="acc" style="margin-top:4px">Passcode bhule gele ei code lagbe.</div>
+      <div class="drow"><button id="dshowrc">Dekhao / Notun kore banao</button></div>
+    </div>
+    <strong style="font-size:15px;display:block;margin:4px 2px 8px">🔐 2FA account & secret key</strong>
+    <div id="dlist"></div>
   </div></div>
 
   <button class="fab" id="add" aria-label="Add account">+</button>
@@ -203,6 +229,13 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
   </div></div>
 </div>
 
+<!-- ============ Admin Panel (operator-only, separate login) ============ -->
+<div id="adminApp" style="display:none"><div class="wrap">
+  <div class="top"><h1>Admin Panel</h1><button class="ib" id="aLogout" aria-label="Logout">🚪</button></div>
+  <div class="warn-box">Shudhu account metadata dekhano hoy — kono user-er password, passcode, ba 2FA secret ekhane kokhono dekhano hoy na (server-er kache seta thake-i na).</div>
+  <div id="aList"></div>
+</div></div>
+
 <!-- ============ Dialog ============ -->
 <div class="sheet" id="dlg"><div class="panel">
   <strong style="font-size:18px" id="dt"></strong>
@@ -229,7 +262,7 @@ const putU=()=>{if(cur&&cur.token&&cur.vault&&users.indexOf(cur)>=0){cur.dirty=t
 
 /* ---------- server (VPS) ---------- */
 const API='https://treauth.bot-keep.xyz/api'; /* <-- nijer VPS domain eikhane boshao */
-const EM={username_invalid:'Username 3-20 ta akkhor (a-z, 0-9, _ .)',email_invalid:'Gmail ta thik na',email_domain:'Shudhu Gmail address cholbe',phone_invalid:'Phone number thik na',password_short:'Password kom pokkhe 6 ta hote hobe',username_taken:'Ei username agei ache',email_taken:'Ei Gmail agei ache',phone_taken:'Ei number agei ache',bad_code:'Code thik na ba expire hoye geche',wait:'Ektu opekkha kore abar chesta koro',too_many:'Onek bar chesta korecho, pore abar koro',invalid:'Login thik na. Abar check koro.',verify_needed:'Gmail verify korte hobe',net:'Server-e connect hocche na. Internet check koro'};
+const EM={username_invalid:'Username 3-20 ta akkhor (a-z, 0-9, _ .)',email_invalid:'Gmail ta thik na',email_domain:'Shudhu Gmail address cholbe',phone_invalid:'Phone number thik na',password_short:'Password kom pokkhe 6 ta hote hobe',username_taken:'Ei username agei ache',email_taken:'Ei Gmail agei ache',phone_taken:'Ei number agei ache',bad_code:'Code thik na ba expire hoye geche',wait:'Ektu opekkha kore abar chesta koro',too_many:'Onek bar chesta korecho, pore abar koro',invalid:'Login thik na. Abar check koro.',verify_needed:'Gmail verify korte hobe',net:'Server-e connect hocche na. Internet check koro',banned:'Ei account ekhon block kora ache',admin_disabled:'Admin panel enable kora nai (server-e ADMIN_USER/ADMIN_PASS set koro)'};
 const emsg=e=>EM[e.message]||('Error: '+e.message);
 let st=null,pushing=false;
 async function api(path,method='GET',body=null,tok=null,ms=15000){
@@ -368,6 +401,10 @@ $('lgo').onclick=async()=>{
   if(!id||!pw)return e.textContent='Username/Gmail/Number ar Password dao';
   busy=true;e.textContent='';
   try{
+    if(id.toLowerCase()==='admin'){ /* reserved username: operator login, not a normal user account */
+      const r=await api('/admin/login','POST',{username:id,password:pw});
+      adminTok=r.token;$('li').value='';$('lp').value='';openAdmin();return;
+    }
     let r;
     try{r=await srvLogin(id,pw)}
     catch(x){if(x.net)return await offlineLogin(id,pw,e);throw x}
@@ -375,6 +412,54 @@ $('lgo').onclick=async()=>{
   }catch(x){e.textContent=emsg(x)}
   finally{busy=false}
 };
+
+/* ---------- admin panel (operator-only, metadata only, no secrets) ---------- */
+let adminTok=null;
+function openAdmin(){show(null);$('adminApp').style.display='block';loadAdmin()}
+function closeAdmin(){adminTok=null;$('adminApp').style.display='none';showAuth()}
+async function loadAdmin(){
+  $('aList').innerHTML='<div class="empty">Load hocche…</div>';
+  try{
+    const r=await api('/admin/users','GET',null,adminTok);
+    renderAdmin(r.users);
+  }catch(x){
+    if(x.status===401){toast('Admin session sesh, abar login koro');closeAdmin();return}
+    $('aList').innerHTML=`<div class="empty">${esc(emsg(x))}</div>`;
+  }
+}
+function renderAdmin(list){
+  $('aList').innerHTML=list.length?list.map(u=>`<div class="card dcard" data-id="${esc(u.id)}">
+      <div class="r"><div class="av" style="background:${grad(u.username)}">${esc(u.username.charAt(0).toUpperCase())}</div>
+        <div class="mid"><div class="iss">${esc(u.username)}${u.banned?' 🚫':''}</div><div class="acc">📧 ${esc(u.email)}</div><div class="acc">📱 ${esc(u.phone)}</div></div></div>
+      <div class="st"><span>Verified</span><b>${u.verified?'Ha ✅':'Na'}</b></div>
+      <div class="st"><span>Toiri hoyeche</span><b>${new Date(u.created*1000).toLocaleDateString()}</b></div>
+      <div class="st"><span>Vault sync</span><b>${u.vault_updated?new Date(u.vault_updated*1000).toLocaleString():'Kono sync hoyni'}</b></div>
+      <div class="drow">
+        <button data-act="logout">🔌 Force logout</button>
+        <button data-act="ban">${u.banned?'✅ Unban':'🚫 Ban'}</button>
+        <button data-act="del" style="color:var(--danger)">🗑️ Delete</button>
+      </div>
+    </div>`).join(''):'<div class="empty">Kono user nai.</div>';
+}
+$('aList').onclick=async e=>{
+  const b=e.target.closest('button[data-act]');if(!b)return;
+  const card=b.closest('[data-id]'),uid=card.dataset.id,name=card.querySelector('.iss').textContent,act=b.dataset.act;
+  try{
+    if(act==='logout'){
+      if(!await dlg({t:'Force logout',m:name+' -er shob device theke logout kore debo.',ok:'Logout koro'}))return;
+      await api('/admin/force_logout','POST',{user_id:uid},adminTok);toast('Logout kora hoyeche');
+    }else if(act==='ban'){
+      const banning=!b.textContent.includes('Unban');
+      if(!await dlg({t:banning?'Ban koro?':'Unban koro?',m:name+(banning?' ar login korte parbe na.':' abar login korte parbe.'),ok:'Confirm'}))return;
+      await api('/admin/ban','POST',{user_id:uid,banned:banning},adminTok);
+    }else if(act==='del'){
+      if(!await dlg({t:'Account delete korbe?',m:name+' -er account, vault, shob session permanent delete hobe. Ei kaj ferano jabe na.',ok:'Delete koro'}))return;
+      await api('/admin/delete','POST',{user_id:uid},adminTok);toast('Account delete hoyeche');
+    }
+    loadAdmin();
+  }catch(x){toast(emsg(x))}
+};
+$('aLogout').onclick=closeAdmin;
 $('fp').onclick=async()=>{
   if(busy)return;busy=true;const e=$('ae');e.textContent='';$('aok').textContent='';
   try{
@@ -580,7 +665,7 @@ async function voiceGate(){
 }
 
 /* ---------- views ---------- */
-function showView(v){view=v;$('home').hidden=v!=='home';$('catv').hidden=v!=='cat';$('setv').hidden=v!=='set';$('add').hidden=v==='set';window.scrollTo(0,0)}
+function showView(v){view=v;$('home').hidden=v!=='home';$('catv').hidden=v!=='cat';$('setv').hidden=v!=='set';$('dataview').hidden=v!=='data';$('add').hidden=(v==='set'||v==='data');window.scrollTo(0,0)}
 function grad(n){const h=hue(n);return`linear-gradient(135deg,hsl(${h},70%,58%),hsl(${(h+40)%360},70%,48%))`}
 function renderHome(){
   const g={};data.a.forEach(a=>{(g[a.cat]=g[a.cat]||[]).push(a)});const cs=CATS.filter(c=>g[c[0]]);
@@ -674,6 +759,50 @@ $('bkr').onclick=async()=>{
   const t=await dlg({t:'Backup restore',m:'Backup text paste koro. Tarpor backup-er passcode lagbe.',input:'text',ok:'Restore'});if(!t)return;
   try{const v=JSON.parse(atob(t.trim()));if(!v.p||!v.r||!v.d||!v.iv)throw 0;cur.vault=v;putU();showLock();toast('Restore hoyeche. Backup-er passcode dao')}
   catch(e){toast('Backup text thik na')}
+};
+
+/* ---------- full data view (owner-only, password gated) ---------- */
+let showSec={};
+function renderData(){
+  showSec={};
+  $('dprof').innerHTML=`<div class="r"><div class="av" style="background:${grad(cur.un)}">${esc(cur.un.charAt(0).toUpperCase())}</div><div class="mid"><div class="iss">${esc(cur.un)}</div><div class="acc">📧 ${esc(cur.em)}</div><div class="acc">📱 ${esc(cur.ph)}</div></div></div>`;
+  $('dlist').innerHTML=data.a.length?data.a.map((a,i)=>`<div class="card dcard" data-i="${i}">
+      <div class="r"><div class="av" style="background:${grad(a.name)}">${esc(a.name.trim().charAt(0).toUpperCase()||'?')}</div><div class="mid"><div class="iss">${esc(a.name)}</div><div class="acc">${esc(a.cat)} · ${a.digits||6} digit · ${a.period||30}s</div></div></div>
+      <div class="sec hide" data-sec="${i}">${esc(a.secret)}</div>
+      <div class="drow"><button data-tog="${i}">👁️ Dekhao/Lukao</button><button data-cp="${i}">📋 Copy secret</button></div>
+    </div>`).join(''):'<div class="empty">Kono account nai.</div>';
+}
+$('opendata').onclick=async()=>{
+  if(!await askPw('Admin Panel dekhte password dao'))return;
+  renderData();showView('data');
+};
+$('db').onclick=()=>{showView('set')};
+$('dlist').onclick=e=>{
+  const t=e.target.closest('[data-tog]'),c=e.target.closest('[data-cp]');
+  if(t){const el=$('dlist').querySelector(`.sec[data-sec="${t.dataset.tog}"]`);el.classList.toggle('hide');return}
+  if(c){const a=data.a[+c.dataset.cp];if(!a)return;navigator.clipboard.writeText(a.secret).then(()=>toast('Secret key copy hoyeche'),()=>toast('Copy hoyni'))}
+};
+$('dshowrc').onclick=async()=>{
+  if(!await askPw('Recovery code dekhte password dao'))return;
+  if(await dlg({t:'Recovery code',m:'Notun recovery code banabo? Ager code ar kaj korbe na.',ok:'Notun banao'})){
+    const rc=genCode();cur.vault.r=await wrap(mk,rc.replace(/-/g,''));putU();showRC(rc,()=>{show(null);$('app').style.display='block';showView('data')});
+  }
+};
+$('dpwreset').onclick=async()=>{
+  if(busy)return;
+  if(!cur.token){toast('Offline-e password change kora jay na, internet lagbe');return}
+  busy=true;
+  try{
+    const op=await dlg({t:'Current password',m:'Age-r password confirm koro.',input:'pw',ok:'Next'});
+    if(!op)return;
+    const np=await dlg({t:'Notun password',m:'Kom pokkhe 6 ta akkhor. Passcode ar shob 2FA account ager moto-i thakbe. Shudhu login-er password-ta bodlabe.',input:'pw',ok:'Save'});
+    if(!np)return;
+    if(np.length<6){toast(EM.password_short);return}
+    await api('/change_password','POST',{old_password:op,new_password:np},cur.token);
+    const ps=rnd(16);cur.ps=b64(ps);cur.pw=await hashPw(np,ps);putU(); /* offline login hash-o update */
+    toast('Password change hoyeche ✅');
+  }catch(x){toast(x.message==='invalid'?'Current password thik na':emsg(x))}
+  finally{busy=false}
 };
 
 /* ---------- totp ---------- */
