@@ -95,6 +95,7 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
     <input id="li" placeholder="Username / Gmail / Number" autocomplete="username" autocapitalize="off">
     <input id="lp" type="password" placeholder="Password" autocomplete="current-password">
     <button class="pri" id="lgo">Login</button>
+    <button class="lk" id="fp" style="width:100%">Password bhule gechi?</button>
   </div>
   <div id="fs" hidden>
     <input id="su" placeholder="Username" autocomplete="off" autocapitalize="off">
@@ -223,7 +224,87 @@ const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
 
 let users=[],cur=null,mk=null,key=null,data=null,mode='',pin='',tmp='',busy=false,tries=0,ltries=0,native=false,inApp=false,view='home',curCat=null,addCat=null,ci=null,cexp=0,rcNext=null,gating=false,saving=false;
 const getU=()=>{try{return JSON.parse(localStorage.getItem(UK)||'[]')}catch(e){return[]}};
-const putU=()=>{try{localStorage.setItem(UK,JSON.stringify(users))}catch(e){}};
+const putRaw=()=>{try{localStorage.setItem(UK,JSON.stringify(users))}catch(e){}};
+const putU=()=>{if(cur&&cur.token&&cur.vault&&users.indexOf(cur)>=0){cur.dirty=true;putRaw();clearTimeout(st);st=setTimeout(()=>push(),700)}else putRaw()};
+
+/* ---------- server (VPS) ---------- */
+const API='https://treauth.bot-keep.xyz/api'; /* <-- nijer VPS domain eikhane boshao */
+const EM={username_invalid:'Username 3-20 ta akkhor (a-z, 0-9, _ .)',email_invalid:'Gmail ta thik na',email_domain:'Shudhu Gmail address cholbe',phone_invalid:'Phone number thik na',password_short:'Password kom pokkhe 6 ta hote hobe',username_taken:'Ei username agei ache',email_taken:'Ei Gmail agei ache',phone_taken:'Ei number agei ache',bad_code:'Code thik na ba expire hoye geche',wait:'Ektu opekkha kore abar chesta koro',too_many:'Onek bar chesta korecho, pore abar koro',invalid:'Login thik na. Abar check koro.',verify_needed:'Gmail verify korte hobe',net:'Server-e connect hocche na. Internet check koro'};
+const emsg=e=>EM[e.message]||('Error: '+e.message);
+let st=null,pushing=false;
+async function api(path,method='GET',body=null,tok=null,ms=15000){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);
+  try{
+    const r=await fetch(API+path,{method,headers:{'Content-Type':'application/json',...(tok?{Authorization:'Bearer '+tok}:{})},body:body?JSON.stringify(body):undefined,signal:c.signal});
+    let j={};try{j=await r.json()}catch(e){}
+    if(!r.ok){const e=new Error(j.detail||('http'+r.status));e.status=r.status;e.data=j;throw e}
+    return j;
+  }catch(e){if(e.status)throw e;const n=new Error('net');n.net=true;throw n}
+  finally{clearTimeout(t)}
+}
+async function verifyFlow(em){
+  for(;;){
+    const c=await dlg({t:'Gmail verify koro',m:em+' e 6 digit code pathano hoyeche. Code ta dao (Spam folder-o dekho).',input:'text',ok:'Verify'});
+    if(!c)return false;
+    try{await api('/verify','POST',{email:em,code:c.trim()});return true}
+    catch(e){toast(emsg(e));if(e.net)return false}
+  }
+}
+async function srvLogin(id,pw){
+  try{return await api('/login','POST',{id,password:pw})}
+  catch(x){
+    if(x.message==='unverified'){
+      const em=x.data.email;try{await api('/resend','POST',{email:em})}catch(_){}
+      if(await verifyFlow(em))return await api('/login','POST',{id,password:pw});
+      throw new Error('verify_needed');
+    }
+    throw x;
+  }
+}
+async function adopt(r,pw){
+  users=getU();const s=r.user;
+  let u=users.find(x=>x.id===s.id);
+  if(!u){u=users.find(x=>!x.token&&x.em===s.em);if(u)u.id=s.id} /* purano local-only account */
+  if(!u){u={id:s.id,bio:null,vault:null};users.push(u)}
+  Object.assign(u,{un:s.un,em:s.em,ph:s.ph,token:r.token});
+  const ps=rnd(16);u.ps=b64(ps);u.pw=await hashPw(pw,ps); /* offline login-er jonno */
+  if(r.vault&&!u.dirty){u.vault=r.vault;u.rev=r.rev}
+  else{u.rev=r.rev||0;if(u.vault)u.dirty=true}
+  cur=u;try{localStorage.setItem(SK,u.id)}catch(x){}
+  putRaw();if(u.dirty)setTimeout(()=>push(),300);
+}
+async function push(force=false,u=cur){
+  if(!u||!u.token||!u.vault||!u.dirty)return;
+  if(pushing){clearTimeout(st);st=setTimeout(()=>push(force,u),800);return}
+  pushing=true;
+  try{
+    const snap=JSON.stringify(u.vault);
+    const r=await api('/vault','PUT',{vault:u.vault,base_rev:u.rev||0,force},u.token);
+    u.rev=r.rev;if(JSON.stringify(u.vault)===snap)u.dirty=false;putRaw();
+  }catch(e){
+    if(e.status===409&&!force){pushing=false;await resolveConflict(u,e.data)}
+    else if(e.status===401){u.token=null;putRaw();toast('Session sesh, abar login koro')}
+    else if(!e.net)toast('Sync hoyni: '+emsg(e));
+  }finally{pushing=false}
+}
+async function resolveConflict(u,srv){
+  /* onno device e vault change hoyeche */
+  if(!(key&&data&&u===cur))return; /* lock obosthay: unlock-er por merge hobe */
+  try{
+    const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:ub(srv.vault.iv)},key,ub(srv.vault.d));
+    const sd=JSON.parse(D.decode(pt)),have=new Set(data.a.map(a=>a.secret));
+    (sd.a||[]).forEach(a=>{if(!have.has(a.secret))data.a.push(a)});
+    u.rev=srv.rev;await save();refresh();
+  }catch(e){u.rev=srv.rev;push(true,u)} /* key mile nai (alada backup restore) -> ei device-er copy-i thakbe */
+}
+async function pull(){
+  const u=cur;if(!u||!u.token||u.dirty||inApp)return;
+  try{
+    const r=await api('/vault','GET',null,u.token,8000);
+    if(r.vault&&r.rev>(u.rev||0)&&!u.dirty&&!inApp&&cur===u){u.vault=r.vault;u.rev=r.rev;putRaw()}
+  }catch(e){if(e.status===401){u.token=null;putRaw()}}
+}
+window.addEventListener('online',()=>push());
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1800)}
 function show(id){document.querySelectorAll('.scr').forEach(s=>s.classList.toggle('on',s.id===id))}
 
@@ -267,30 +348,52 @@ $('sgo').onclick=async()=>{
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em))return e.textContent='Gmail ta thik na';
   if(!/^\+?\d{7,15}$/.test(ph))return e.textContent='Phone number thik na';
   if(pw.length<6)return e.textContent='Password kom pokkhe 6 ta hote hobe';
-  users=getU();
-  if(users.some(u=>u.un.toLowerCase()===un.toLowerCase()))return e.textContent='Ei username agei ache';
-  if(users.some(u=>u.em===em))return e.textContent='Ei Gmail agei ache';
-  if(users.some(u=>u.ph===ph))return e.textContent='Ei number agei ache';
   busy=true;
-  try{const s=rnd(16);users.push({id:b64(rnd(9)),un,em,ph,ps:b64(s),pw:await hashPw(pw,s),vault:null,bio:null});putU();
-    ['su','se','sn','sp'].forEach(i=>$(i).value='');tab(true);$('li').value=un;$('lp').value='';$('aok').textContent='Sign up hoyeche! Ekhon login koro.'}
+  try{
+    await api('/register','POST',{username:un,email:em,phone:ph,password:pw});
+    const ok=await verifyFlow(em);
+    ['su','se','sn','sp'].forEach(i=>$(i).value='');tab(true);$('li').value=un;$('lp').value='';
+    $('aok').textContent=ok?'Sign up hoyeche! Ekhon login koro.':'Account toiri hoyeche. Login korle verify code abar pabe.';
+  }catch(x){e.textContent=emsg(x)}
   finally{busy=false}
 };
+async function offlineLogin(id,pw,e){
+  users=getU();const l=id.toLowerCase(),p=normPh(id);
+  const u=users.find(x=>x.pw&&x.token&&(x.un.toLowerCase()===l||x.em===l||x.ph===p));
+  if(u&&await pwOK(u,pw)){cur=u;try{localStorage.setItem(SK,u.id)}catch(x){}$('lp').value='';beginLock()}
+  else e.textContent=EM.net;
+}
 $('lgo').onclick=async()=>{
   if(busy)return;const id=$('li').value.trim(),pw=$('lp').value,e=$('ae');$('aok').textContent='';
   if(!id||!pw)return e.textContent='Username/Gmail/Number ar Password dao';
   busy=true;e.textContent='';
   try{
-    if(ltries>=3)await sleep(Math.min(20000,(ltries-2)*2000));
-    users=getU();const l=id.toLowerCase(),p=normPh(id);
-    const u=users.find(x=>x.un.toLowerCase()===l||x.em===l||x.ph===p);
-    if(u&&await pwOK(u,pw)){ltries=0;cur=u;try{localStorage.setItem(SK,u.id)}catch(x){}$('lp').value='';beginLock()}
-    else{ltries++;e.textContent='Login thik na. Abar check koro.'}
-  }finally{busy=false}
+    let r;
+    try{r=await srvLogin(id,pw)}
+    catch(x){if(x.net)return await offlineLogin(id,pw,e);throw x}
+    await adopt(r,pw);$('lp').value='';beginLock();
+  }catch(x){e.textContent=emsg(x)}
+  finally{busy=false}
+};
+$('fp').onclick=async()=>{
+  if(busy)return;busy=true;const e=$('ae');e.textContent='';$('aok').textContent='';
+  try{
+    const em=(await dlg({t:'Password reset',m:'Tomar Gmail address dao. 6 digit code pathabo.',input:'text',ok:'Code pathao'})).trim().toLowerCase();
+    if(!em)return;
+    await api('/forgot','POST',{email:em});
+    const code=(await dlg({t:'Code dao',m:em+' e code pathano hoyeche (account thakle).',input:'text',ok:'Next'})).trim();
+    if(!code)return;
+    const np=await dlg({t:'Notun password',m:'Kom pokkhe 6 ta akkhor. Passcode ar data ager moto-i thakbe.',input:'pw',ok:'Save'});
+    if(!np)return;
+    await api('/reset','POST',{email:em,code,password:np});
+    $('aok').textContent='Password change hoyeche. Notun password diye login koro.';
+  }catch(x){e.textContent=emsg(x)}
+  finally{busy=false}
 };
 $('lp').addEventListener('keydown',e=>{if(e.key==='Enter')$('lgo').click()});
 $('sp').addEventListener('keydown',e=>{if(e.key==='Enter')$('sgo').click()});
-function logout(){try{localStorage.removeItem(SK)}catch(e){}closeCode();['sheet','dlg'].forEach(i=>$(i).classList.remove('on'));showAuth()}
+function logout(){const u=cur;try{localStorage.removeItem(SK)}catch(e){}closeCode();['sheet','dlg'].forEach(i=>$(i).classList.remove('on'));showAuth();
+  if(u&&u.token)(async()=>{try{if(u.dirty)await push(false,u);await api('/logout','POST',null,u.token)}catch(e){}u.token=null;putRaw()})()}
 
 /* ---------- passcode screen ---------- */
 const T={setup1:['Passcode set koro','6 digit-er passcode bachho'],setup2:['Passcode abar dao','Confirm korte'],unlock:['Welcome back','Passcode dao'],new1:['Notun passcode','6 digit-er notun passcode'],new2:['Passcode abar dao','Confirm korte'],rec:['Recovery code','Setup-er somoy pawa code ta dao']};
@@ -299,7 +402,7 @@ $('pad').innerHTML=[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>k===''?'<span></span>':
 function dots(){[...$('dots').children].forEach((d,i)=>d.classList.toggle('f',i<pin.length))}
 function shake(){const d=$('dots');d.classList.remove('sh');void d.offsetWidth;d.classList.add('sh')}
 function setMode(m){mode=m;pin='';dots();$('lt').textContent=T[m][0];$('ls').textContent=T[m][1];$('le').textContent='';const r=m==='rec';$('recbox').hidden=!r;$('pad').hidden=r;$('dots').hidden=r;$('fg').hidden=m!=='unlock';$('lo').hidden=!(m==='setup1'||m==='unlock');$('bk').hidden=!(r||m==='new1'||m==='new2')}
-function beginLock(){inApp=false;key=mk=data=null;ci=null;$('app').style.display='none';['sheet','csheet'].forEach(i=>$(i).classList.remove('on'));setMode(cur.vault?'unlock':'setup1');show('lock')}
+function beginLock(){inApp=false;key=mk=data=null;ci=null;$('app').style.display='none';['sheet','csheet'].forEach(i=>$(i).classList.remove('on'));setMode(cur.vault?'unlock':'setup1');show('lock');pull()}
 function showLock(){closeCode();beginLock()}
 function showRC(rc,next){rcNext=next;$('rcc').textContent=rc;show('rcs')}
 async function submit(){
@@ -337,7 +440,7 @@ async function afterPin(){
   else if(data.v.mode==='voice'){if(!await voiceFlow('verify'))return beginLock()}
   openApp();
 }
-function openApp(){show(null);$('app').style.display='block';inApp=true;curCat=null;showView('home');renderHome()}
+function openApp(){push();show(null);$('app').style.display='block';inApp=true;curCat=null;showView('home');renderHome()}
 
 /* ---------- biometric (WebAuthn, platform authenticator) ---------- */
 const NB=()=>window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.NativeBiometric;
