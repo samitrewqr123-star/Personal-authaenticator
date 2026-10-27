@@ -96,7 +96,7 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
 
 <!-- ============ Login / Sign up ============ -->
 <div id="adm" class="scr" style="align-items:stretch;text-align:left"><div style="width:100%;max-width:480px;margin:0 auto">
-  <div class="top"><div><h1>Admin Panel</h1><small style="color:var(--mut)">TRE AUTH server</small></div><button class="ib" id="alo" aria-label="Logout">&#x23CF;</button></div>
+  <div class="top"><div><h1>Admin Panel</h1><small style="color:var(--mut)">TRE AUTH</small></div><button class="ib" id="alo" aria-label="Logout">&#x23CF;</button></div>
   <div id="astats" class="agrid"></div>
   <div style="display:flex;gap:8px;margin:12px 0"><input id="aq" placeholder="Search username / Gmail / number" style="margin:0"><button class="ib" id="arf" aria-label="Refresh">&#x27F3;</button></div>
   <div id="alist"></div>
@@ -388,14 +388,14 @@ async function admLoad(){
     const [s,u]=await Promise.all([api('/admin/stats','GET',null,admTok),api('/admin/users?q='+encodeURIComponent($('aq').value.trim()),'GET',null,admTok)]);
     $('astats').innerHTML=[['Total user',s.users],['Verified',s.verified],['Notun (24h)',s.new_24h],['Active (7d)',s.active_7d],['Vault',Object.entries(s.vaults).map(([k,v])=>k+' '+v).join(' · ')||'0']].map(x=>`<div class="ast"><b>${hx(x[1])}</b><small>${hx(x[0])}</small></div>`).join('');
     $('alist').innerHTML=u.users.length?u.users.map(x=>`<div class="card"><div class="iss">${hx(x.username)}</div><div class="acc">${hx(x.email)} · ${hx(x.phone)}</div>
-      <div style="margin-top:8px"><span class="chp ${x.verified?'g':'b'}">${x.verified?'Verified':'Unverified'}</span><span class="chp">Joined ${dt(x.created)}</span><span class="chp">Last ${dt(x.last)}</span><span class="chp">${x.sessions} session</span><span class="chp">${x.auth_rev!=null||x.apps?'Vault ✓':'No vault'}</span></div>
+      <div style="margin-top:8px"><span class="chp ${x.verified?'g':'b'}">${x.verified?'Verified':'Unverified'}</span><span class="chp">Joined ${dt(x.created)}</span><span class="chp">Last ${dt(x.last)}</span><span class="chp">${x.sessions} session</span><span class="chp">${x.rev!=null?'Vault ✓':'No vault'}</span></div>
       <div>${x.verified?'':`<button class="ab" data-id="${hx(x.id)}" data-a="verify">Verify</button>`}<button class="ab" data-id="${hx(x.id)}" data-a="password">Password set</button><button class="ab" data-id="${hx(x.id)}" data-a="logout">Logout all</button><button class="ab d" data-id="${hx(x.id)}" data-a="delete" data-n="${hx(x.username)}">Delete</button></div></div>`).join(''):'<p style="text-align:center;color:var(--mut)">Kono user paoa jay ni</p>';
   }catch(e){if(e.status===401){admTok=null;showAuth();toast('Admin session sesh, abar login koro')}else toast(emsg(e))}
 }
 $('alist').onclick=async e=>{
   const b=e.target.closest('button[data-a]');if(!b||!admTok)return;
   const id=b.dataset.id,a=b.dataset.a;let value='';
-  if(a==='delete'){if(!await dlg({t:'User delete',m:b.dataset.n+' ke chirotore muche felbe? Tar server-e save kora sob vault-o muche jabe.',ok:'Delete'}))return}
+  if(a==='delete'){if(!await dlg({t:'User delete',m:b.dataset.n+' ke chirotore muche felbe? Tar TRE AUTH-er server vault muche jabe (TRE GUARD-e account thakle sheta thakbe).',ok:'Delete'}))return}
   else if(a==='logout'){if(!await dlg({t:'Logout all',m:'Ei user-ke sob device theke logout kora hobe.',ok:'Logout'}))return}
   else if(a==='password'){value=(await dlg({t:'Notun password',m:'User-er notun password (kom pokkhe 6 akkhor). Tar passcode ar data ager moto-i thakbe.',input:'text',ok:'Set'})||'').trim();if(!value)return}
   try{await api('/admin/user','POST',{id,action:a,value},admTok);toast('Hoyeche');admLoad()}catch(x){toast(emsg(x))}
