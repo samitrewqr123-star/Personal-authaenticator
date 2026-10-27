@@ -125,7 +125,7 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
   <div class="logo">🔐</div>
   <h1 id="lt"></h1><p id="ls"></p>
   <div id="dots"></div>
-  <div id="recbox" hidden><input id="rcin" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"><button class="pri" id="rcgo">Continue</button></div>
+  <div id="recbox" hidden><input id="rcin" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off"><button class="pri" id="rcgo">Continue</button><button class="pri" id="rcpw" style="background:var(--bd);color:var(--tx)">🔑 Password diye recover koro</button></div>
   <div id="pad"></div>
   <div class="err" id="le"></div>
   <div><button class="lk" id="fg">Passcode bhule gechi</button><button class="lk" id="lo">Logout</button><button class="lk" id="bk" hidden>Back</button></div>
@@ -179,6 +179,7 @@ button.pri,.btns .ok{background:linear-gradient(135deg,var(--ac),var(--ac2));col
       <button id="rbio">🧬 Biometric abar set koro</button>
       <button id="rvc">🎙️ Voice abar set koro</button>
       <button id="nrc">🗝️ Notun recovery code</button>
+      <button id="epw">🔑 Password recovery chalu/update koro</button>
       <button id="bkc">📋 Backup copy koro</button>
       <button id="bke">✉️ Backup Gmail e pathao</button>
       <button id="bkr">♻️ Backup restore</button>
@@ -235,7 +236,7 @@ const CATS=[['Facebook','f','#1877f2'],['Gmail','G','#ea4335'],['Instagram','I',
 const catOf=n=>CATS.find(c=>c[0]===n)||CATS[CATS.length-1];
 const hue=n=>{let h=0;for(const c of n)h=(h*31+c.charCodeAt(0))%360;return h};
 
-let users=[],cur=null,mk=null,key=null,data=null,mode='',pin='',tmp='',busy=false,tries=0,ltries=0,native=false,inApp=false,view='home',curCat=null,addCat=null,ci=null,cexp=0,rcNext=null,gating=false,saving=false;
+let users=[],cur=null,mk=null,key=null,data=null,mode='',pin='',tmp='',busy=false,tries=0,ltries=0,native=false,inApp=false,view='home',curCat=null,addCat=null,ci=null,cexp=0,rcNext=null,gating=false,saving=false,sPw=null,recTries=0,recBlock=0;
 const getU=()=>{try{return JSON.parse(localStorage.getItem(UK)||'[]')}catch(e){return[]}};
 const putRaw=()=>{try{localStorage.setItem(UK,JSON.stringify(users))}catch(e){}};
 const putU=()=>{if(cur&&cur.token&&cur.vault&&users.indexOf(cur)>=0){cur.dirty=true;putRaw();clearTimeout(st);st=setTimeout(()=>push(),700)}else putRaw()};
@@ -281,6 +282,7 @@ async function adopt(r,pw){
   if(!u){u={id:s.id,bio:null,vault:null};users.push(u)}
   Object.assign(u,{un:s.un,em:s.em,ph:s.ph,token:r.token});
   const ps=rnd(16);u.ps=b64(ps);u.pw=await hashPw(pw,ps); /* offline login-er jonno */
+  sPw=pw; /* unlock-er por vault-e password-recovery key (vault.w) update korte, tarpor muche jabe */
   if(r.vault&&!u.dirty){u.vault=r.vault;u.rev=r.rev}
   else{u.rev=r.rev||0;if(u.vault)u.dirty=true}
   cur=u;try{localStorage.setItem(SK,u.id)}catch(x){}
@@ -354,7 +356,7 @@ function dlg({t,m='',input=null,ok='OK',cancel=true}){return new Promise(res=>{
 const normPh=s=>s.replace(/[\s\-()]/g,'');
 function tab(l){$('tl').classList.toggle('on',l);$('ts').classList.toggle('on',!l);$('fl').hidden=!l;$('fs').hidden=l;$('ae').textContent=''}
 $('tl').onclick=()=>{tab(true);$('aok').textContent=''};$('ts').onclick=()=>{tab(false);$('aok').textContent=''};
-function showAuth(){inApp=false;cur=null;key=mk=data=null;$('app').style.display='none';['li','lp','su','se','sn','sp'].forEach(i=>$(i).value='');tab(true);show('auth')}
+function showAuth(){inApp=false;cur=null;key=mk=data=null;sPw=null;$('app').style.display='none';['li','lp','su','se','sn','sp'].forEach(i=>$(i).value='');tab(true);show('auth')}
 $('sgo').onclick=async()=>{
   if(busy)return;const un=$('su').value.trim(),em=$('se').value.trim().toLowerCase(),ph=normPh($('sn').value),pw=$('sp').value,e=$('ae');$('aok').textContent='';
   if(!/^[A-Za-z0-9_.]{3,20}$/.test(un))return e.textContent='Username 3-20 ta akkhor (a-z, 0-9, _ .)';
@@ -373,7 +375,7 @@ $('sgo').onclick=async()=>{
 async function offlineLogin(id,pw,e){
   users=getU();const l=id.toLowerCase(),p=normPh(id);
   const u=users.find(x=>x.pw&&x.token&&(x.un.toLowerCase()===l||x.em===l||x.ph===p));
-  if(u&&await pwOK(u,pw)){cur=u;try{localStorage.setItem(SK,u.id)}catch(x){}$('lp').value='';beginLock()}
+  if(u&&await pwOK(u,pw)){cur=u;sPw=pw;try{localStorage.setItem(SK,u.id)}catch(x){}$('lp').value='';beginLock()}
   else e.textContent=EM.net;
 }
 /* ---------- admin panel (server admin login) ---------- */
@@ -389,7 +391,7 @@ async function admLoad(){
     $('astats').innerHTML=[['Total user',s.users],['Verified',s.verified],['Notun (24h)',s.new_24h],['Active (7d)',s.active_7d],['Vault',Object.entries(s.vaults).map(([k,v])=>k+' '+v).join(' · ')||'0']].map(x=>`<div class="ast"><b>${hx(x[1])}</b><small>${hx(x[0])}</small></div>`).join('');
     $('alist').innerHTML=u.users.length?u.users.map(x=>`<div class="card"><div class="iss">${hx(x.username)}</div><div class="acc">${hx(x.email)} · ${hx(x.phone)}</div>
       <div style="margin-top:8px"><span class="chp ${x.verified?'g':'b'}">${x.verified?'Verified':'Unverified'}</span><span class="chp">Joined ${dt(x.created)}</span><span class="chp">Last ${dt(x.last)}</span><span class="chp">${x.sessions} session</span><span class="chp">${x.rev!=null?'Vault ✓':'No vault'}</span></div>
-      <div>${x.verified?'':`<button class="ab" data-id="${hx(x.id)}" data-a="verify">Verify</button>`}<button class="ab" data-id="${hx(x.id)}" data-a="password">Password set</button><button class="ab" data-id="${hx(x.id)}" data-a="logout">Logout all</button><button class="ab d" data-id="${hx(x.id)}" data-a="delete" data-n="${hx(x.username)}">Delete</button></div></div>`).join(''):'<p style="text-align:center;color:var(--mut)">Kono user paoa jay ni</p>';
+      <div>${x.verified?'':`<button class="ab" data-id="${hx(x.id)}" data-a="verify">Verify</button>`}<button class="ab" data-id="${hx(x.id)}" data-a="email" data-v="${hx(x.email)}">Gmail change</button><button class="ab" data-id="${hx(x.id)}" data-a="phone" data-v="${hx(x.phone)}">Number change</button><button class="ab" data-id="${hx(x.id)}" data-a="password">Password set</button><button class="ab" data-id="${hx(x.id)}" data-a="logout">Logout all</button><button class="ab d" data-id="${hx(x.id)}" data-a="delete" data-n="${hx(x.username)}">Delete</button></div></div>`).join(''):'<p style="text-align:center;color:var(--mut)">Kono user paoa jay ni</p>';
   }catch(e){if(e.status===401){admTok=null;showAuth();toast('Admin session sesh, abar login koro')}else toast(emsg(e))}
 }
 $('alist').onclick=async e=>{
@@ -398,6 +400,9 @@ $('alist').onclick=async e=>{
   if(a==='delete'){if(!await dlg({t:'User delete',m:b.dataset.n+' ke chirotore muche felbe? Tar TRE AUTH-er server vault muche jabe (TRE GUARD-e account thakle sheta thakbe).',ok:'Delete'}))return}
   else if(a==='logout'){if(!await dlg({t:'Logout all',m:'Ei user-ke sob device theke logout kora hobe.',ok:'Logout'}))return}
   else if(a==='password'){value=(await dlg({t:'Notun password',m:'User-er notun password (kom pokkhe 6 akkhor). Tar passcode ar data ager moto-i thakbe.',input:'text',ok:'Set'})||'').trim();if(!value)return}
+  else if(a==='email'||a==='phone'){
+    const isE=a==='email';value=(await dlg({t:isE?'Gmail change':'Number change',m:'Kono verification lagbe na, sathe sathe change hobe. Account-er (TRE AUTH + TRE GUARD duitar-i) '+(isE?'Gmail':'number')+' change hobe.',input:'text',ok:'Change'})||'').trim();
+    if(!value||value===b.dataset.v)return}
   try{await api('/admin/user','POST',{id,action:a,value},admTok);toast('Hoyeche');admLoad()}catch(x){toast(emsg(x))}
 };
 $('arf').onclick=()=>admLoad();
@@ -438,7 +443,7 @@ function logout(){const u=cur;try{localStorage.removeItem(SK)}catch(e){}closeCod
   if(u&&u.token)(async()=>{try{if(u.dirty)await push(false,u);await api('/logout','POST',null,u.token)}catch(e){}u.token=null;putRaw()})()}
 
 /* ---------- passcode screen ---------- */
-const T={setup1:['Passcode set koro','6 digit-er passcode bachho'],setup2:['Passcode abar dao','Confirm korte'],unlock:['Welcome back','Passcode dao'],new1:['Notun passcode','6 digit-er notun passcode'],new2:['Passcode abar dao','Confirm korte'],rec:['Recovery code','Setup-er somoy pawa code ta dao']};
+const T={setup1:['Passcode set koro','6 digit-er passcode bachho'],setup2:['Passcode abar dao','Confirm korte'],unlock:['Welcome back','Passcode dao'],new1:['Notun passcode','6 digit-er notun passcode'],new2:['Passcode abar dao','Confirm korte'],rec:['Passcode recover','Recovery code dao, ba account password diye recover koro']};
 $('dots').innerHTML='<i></i>'.repeat(6);
 $('pad').innerHTML=[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>k===''?'<span></span>':`<button data-k="${k}">${k}</button>`).join('');
 function dots(){[...$('dots').children].forEach((d,i)=>d.classList.toggle('f',i<pin.length))}
@@ -453,7 +458,7 @@ async function submit(){
     if(m==='setup1'||m==='new1'){tmp=p;setMode(m==='setup1'?'setup2':'new2');return}
     if(m==='setup2'||m==='new2'){
       if(p!==tmp){setMode(m==='setup2'?'setup1':'new1');$('le').textContent='Passcode mile nai, abar dao';shake();return}
-      if(m==='setup2'){const raw=rnd(32),rc=genCode();cur.vault={p:await wrap(raw,p),r:await wrap(raw,rc.replace(/-/g,''))};await useMk(raw);data={a:[],v:null};await save();showRC(rc,afterPin)}
+      if(m==='setup2'){const raw=rnd(32),rc=genCode();cur.vault={p:await wrap(raw,p),r:await wrap(raw,rc.replace(/-/g,''))};if(sPw)cur.vault.w=await wrap(raw,sPw);await useMk(raw);data={a:[],v:null};await save();showRC(rc,afterPin)}
       else{cur.vault.p=await wrap(mk,p);await load();await save();afterPin()}
       return}
     if(m==='unlock'){
@@ -467,6 +472,16 @@ async function submit(){
 $('pad').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||busy)return;if(b.dataset.k==='⌫')pin=pin.slice(0,-1);else if(pin.length<6)pin+=b.dataset.k;dots();if(pin.length===6)submit()});
 document.addEventListener('keydown',e=>{if(!$('lock').classList.contains('on')||mode==='rec'||busy)return;if(/^\d$/.test(e.key)&&pin.length<6){pin+=e.key;dots();if(pin.length===6)submit()}else if(e.key==='Backspace'){pin=pin.slice(0,-1);dots()}});
 $('rcgo').onclick=async()=>{const c=$('rcin').value.toUpperCase().replace(/[^A-Z2-7]/g,'');try{await useMk(await unwrap(cur.vault.r,c));$('rcin').value='';setMode('new1')}catch(e){$('le').textContent='Code thik na'}};
+$('rcpw').onclick=async()=>{
+  if(busy)return;
+  if(Date.now()<recBlock){$('le').textContent='Onek bar bhul. 1 minute por try koro';return}
+  if(!cur.vault||!cur.vault.w){$('le').textContent='Ei vault-e password recovery chalu nai. Recovery code dao.';return}
+  const p=await dlg({t:'Password dao',m:'Tomar account-er password dao. Tarpor notun passcode set korte parbe.',input:'pw',ok:'Recover'});if(!p)return;
+  busy=true;
+  try{await useMk(await unwrap(cur.vault.w,p));recTries=0;$('le').textContent='';$('rcin').value='';setMode('new1')}
+  catch(e){if(++recTries>=5){recBlock=Date.now()+60000;recTries=0}$('le').textContent='Password mile nai (password change korle ager password lagbe, ba recovery code use koro)'}
+  finally{busy=false}
+};
 $('fg').onclick=()=>setMode('rec');
 $('bk').onclick=()=>beginLock();
 $('lo').onclick=logout;
@@ -475,7 +490,14 @@ $('rcem').onclick=()=>{location.href='mailto:'+encodeURIComponent(cur.em)+'?subj
 $('rcok').onclick=()=>{const n=rcNext;rcNext=null;if(n)n()};
 
 /* ---------- login chain: passcode -> biometric -> voice -> app ---------- */
+async function syncW(){ /* password-recovery key: login-er password diye mk wrap kore rakho (password change hole auto update) */
+  if(!sPw||!mk||!cur.vault)return;
+  try{if(cur.vault.w){await unwrap(cur.vault.w,sPw);sPw=null;return}}catch(e){}
+  try{cur.vault.w=await wrap(mk,sPw);putU()}catch(e){}
+  sPw=null;
+}
 async function afterPin(){
+  await syncW();
   if(cur.bio!=='pin'){if(!await bioScreen(!cur.bio))return beginLock()}
   if(!data.v){if(!await voiceFlow('enroll'))return beginLock()}
   else if(data.v.mode==='voice'&&!data.v.t){if(!await voiceFlow('enroll'))return beginLock()}
@@ -693,6 +715,7 @@ function renderSet(){
   $('pf').innerHTML=`<div class="r"><div class="av" style="background:${grad(cur.un)}">${esc(cur.un.charAt(0).toUpperCase())}</div><div class="mid"><div class="iss">${esc(cur.un)}</div><div class="acc">${esc(cur.em)}</div><div class="acc">${esc(cur.ph)}</div></div></div>
   <div class="st"><span>Biometric</span><b>${cur.bio&&cur.bio!=='pin'?'Chalu ✅':'Passcode fallback'}</b></div>
   <div class="st"><span>Voice lock</span><b>${data.v&&data.v.mode==='voice'?'Set ache ✅':'Passcode fallback'}</b></div>
+  <div class="st"><span>Password recovery</span><b>${cur.vault&&cur.vault.w?'Chalu ✅':'Bondho'}</b></div>
   <div class="st"><span>Account</span><b>${data.a.length} ta</b></div>`;
 }
 $('gear').onclick=()=>{renderSet();showView('set')};
@@ -706,6 +729,11 @@ $('rbio').onclick=async()=>{
 $('rvc').onclick=async()=>{
   if(!await askPw('Notun voice set korte password dao'))return;
   data.v=null;await save();const ok=await voiceFlow('enroll');if(!ok){toast('Voice set hoyni — porer bar abar set korte hobe')}renderSet();
+};
+$('epw').onclick=async()=>{
+  const p=await dlg({t:'Password dao',m:'Passcode bhule gele ei password diye recover korte parbe.',input:'pw',ok:'Chalu koro'});if(!p)return;
+  if(!await pwOK(cur,p))return toast('Password thik na');
+  cur.vault.w=await wrap(mk,p);putU();toast('Password recovery chalu hoyeche');renderSet();
 };
 $('nrc').onclick=async()=>{const rc=genCode();cur.vault.r=await wrap(mk,rc.replace(/-/g,''));putU();showRC(rc,()=>{show(null)})};
 const bkText=()=>btoa(JSON.stringify(cur.vault));
